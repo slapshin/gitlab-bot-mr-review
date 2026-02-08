@@ -23,8 +23,6 @@ Automated merge request reviewer powered by Claude AI that runs in GitLab CI/CD 
 ```yaml
 claude_review:
   image: ghcr.io/<username>/gitlab-bot-mr-review:main
-  script:
-    - uv run claude_review.py
   only:
     - merge_requests
   variables:
@@ -32,7 +30,7 @@ claude_review:
     ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
 ```
 
-3. The bot will automatically review merge requests when they are opened or updated
+1. The bot will automatically review merge requests when they are opened or updated
 
 ## Development
 
@@ -76,6 +74,7 @@ uv run claude_review.py
 ### Environment Variables
 
 **Required (provided by GitLab CI):**
+
 - `CI_SERVER_URL`: GitLab instance URL
 - `CI_PROJECT_ID`: Project ID
 - `CI_MERGE_REQUEST_IID`: Merge request IID
@@ -84,6 +83,7 @@ uv run claude_review.py
 - `ANTHROPIC_API_KEY`: Anthropic API key
 
 **Optional:**
+
 - `CLAUDE_MODEL`: Claude model to use (default: `claude-sonnet-4-5-20250929`)
 - `MAX_DIFF_CHARS`: Maximum diff size to review (default: `100000`)
 
