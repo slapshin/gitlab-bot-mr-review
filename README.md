@@ -22,9 +22,11 @@ Automated merge request reviewer powered by Claude AI that runs in GitLab CI/CD 
 
 ```yaml
 claude_review:
-  image: ghcr.io/<username>/gitlab-bot-mr-review:main
-  only:
-    - merge_requests
+  image: ghcr.io/slapshin/gitlab-bot-mr-review:sha-9a10d5e
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - uv run claude_review.py
   variables:
     GITLAB_TOKEN: $GITLAB_TOKEN
     ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
