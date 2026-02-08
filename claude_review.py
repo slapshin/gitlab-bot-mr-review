@@ -87,7 +87,8 @@ def main():
     gitlab_url = os.environ["CI_SERVER_URL"]
     project_id = os.environ["CI_PROJECT_ID"]
     mr_iid = os.environ["CI_MERGE_REQUEST_IID"]
-    gitlab_token = os.environ["GITLAB_TOKEN"]
+    # Try GITLAB_TOKEN first, fallback to CI_JOB_TOKEN
+    gitlab_token = os.getenv("GITLAB_TOKEN") or os.environ["CI_JOB_TOKEN"]
     source_branch = os.environ["CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"]
 
     gl = gitlab.Gitlab(gitlab_url, private_token=gitlab_token)
@@ -112,7 +113,9 @@ def main():
 
     prompt = build_prompt(mr, diff_text, claude_context)
 
-    client = anthropic.Anthropic()
+    # Initialize Anthropic client with API key from environment
+    api_key = os.environ["ANTHROPIC_API_KEY"]
+    client = anthropic.Anthropic(api_key=api_key)
     model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
     msg = client.messages.create(
         model=model,
