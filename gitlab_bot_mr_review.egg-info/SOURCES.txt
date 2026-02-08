@@ -1,0 +1,7 @@
+claude_review.py
+pyproject.toml
+gitlab_bot_mr_review.egg-info/PKG-INFO
+gitlab_bot_mr_review.egg-info/SOURCES.txt
+gitlab_bot_mr_review.egg-info/dependency_links.txt
+gitlab_bot_mr_review.egg-info/requires.txt
+gitlab_bot_mr_review.egg-info/top_level.txt

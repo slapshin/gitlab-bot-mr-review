@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: gitlab-bot-mr-review
+Version: 0.1.0
+Summary: GitLab webhook bot that automatically reviews merge requests using Claude AI
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: anthropic>=0.43.0
+Requires-Dist: python-gitlab>=5.0.0
+Requires-Dist: pyyaml>=6.0.0

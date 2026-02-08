@@ -1,0 +1,7 @@
+{
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "file": ".claude/rules/commit-messages.md",
+    }
+  ],
+}
