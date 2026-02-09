@@ -2,6 +2,7 @@
 import os
 import gitlab
 import anthropic
+from pathlib import Path
 
 
 # Standard .claude paths that Claude Code uses
@@ -12,37 +13,36 @@ CLAUDE_MD_PATHS = [
 ]
 
 
-def load_claude_context(project, ref):
-    """Load CLAUDE.md and .claude/ config files from the repo."""
+def load_claude_context():
+    """Load CLAUDE.md and .claude/ config files from local filesystem."""
     context_parts = []
 
+    # Load standard paths
     for path in CLAUDE_MD_PATHS:
-        try:
-            raw = project.files.get(path, ref=ref)
-            content = raw.decode().decode("utf-8")
-            context_parts.append(f"--- {path} ---\n{content}")
-        except gitlab.exceptions.GitlabGetError:
-            continue
-
-    # Also check for .claude/settings.local.json, commands, etc.
-    try:
-        items = project.repository_tree(
-            path=".claude", ref=ref, recursive=True, all=True
-        )
-        for item in items:
-            if item["type"] != "blob":
-                continue
-            full_path = item["path"]
-            if full_path in CLAUDE_MD_PATHS:
-                continue
+        file_path = Path(path)
+        if file_path.exists() and file_path.is_file():
             try:
-                raw = project.files.get(full_path, ref=ref)
-                content = raw.decode().decode("utf-8")
-                context_parts.append(f"--- {full_path} ---\n{content}")
-            except gitlab.exceptions.GitlabGetError:
+                content = file_path.read_text(encoding="utf-8")
+                context_parts.append(f"--- {path} ---\n{content}")
+            except Exception as e:
+                print(f"Warning: Could not read {path}: {e}")
                 continue
-    except gitlab.exceptions.GitlabGetError:
-        pass
+
+    # Load all other files in .claude/ directory
+    claude_dir = Path(".claude")
+    if claude_dir.exists() and claude_dir.is_dir():
+        for file_path in claude_dir.rglob("*"):
+            if file_path.is_file():
+                rel_path = str(file_path)
+                # Skip already loaded files
+                if rel_path in CLAUDE_MD_PATHS:
+                    continue
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                    context_parts.append(f"--- {rel_path} ---\n{content}")
+                except Exception as e:
+                    print(f"Warning: Could not read {rel_path}: {e}")
+                    continue
 
     return "\n\n".join(context_parts)
 
@@ -89,13 +89,12 @@ def main():
     mr_iid = os.environ["CI_MERGE_REQUEST_IID"]
     # Try GITLAB_TOKEN first, fallback to CI_JOB_TOKEN
     gitlab_token = os.getenv("GITLAB_TOKEN") or os.environ["CI_JOB_TOKEN"]
-    source_branch = os.environ["CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"]
 
     gl = gitlab.Gitlab(gitlab_url, private_token=gitlab_token)
     project = gl.projects.get(project_id)
 
-    # Load .claude/ context from source branch
-    claude_context = load_claude_context(project, source_branch)
+    # Load .claude/ context from local filesystem
+    claude_context = load_claude_context()
     if claude_context:
         print(f"Loaded .claude/ context ({len(claude_context)} chars)")
     else:

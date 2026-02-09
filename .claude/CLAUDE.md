@@ -16,7 +16,7 @@ This is a GitLab CI/CD script that automatically reviews merge requests using Cl
 
 **Key functions**:
 
-- `load_claude_context(project, ref)`: Loads CLAUDE.md and .claude/ configuration files from the repository for context-aware reviews
+- `load_claude_context()`: Loads CLAUDE.md and .claude/ configuration files from the local filesystem for context-aware reviews
 - `get_mr_diff(project, mr_iid)`: Fetches diff data from GitLab API
 - `build_prompt(mr, diff_text, claude_context)`: Constructs the review prompt with project rules
 - `main()`: Orchestrates the review process using CI environment variables
@@ -114,7 +114,8 @@ Built images are published to: `ghcr.io/<username>/gitlab-bot-mr-review:<tag>`
 
 ## Notable Implementation Details
 
-- Loads .claude/ configuration from the source branch for context-aware reviews
+- Loads .claude/ configuration from local filesystem (checked out by GitLab runner)
 - Truncates diffs larger than MAX_DIFF_CHARS to prevent token limit issues
 - Review comments are branded with 🤖 emoji as "Claude Code Review"
 - Gracefully handles missing .claude/ configuration
+- Uses CI_JOB_TOKEN as fallback if GITLAB_TOKEN is not provided
