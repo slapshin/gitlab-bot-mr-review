@@ -66,24 +66,104 @@ def build_prompt(mr, diff_text, claude_context):
     context_block = ""
     if claude_context:
         context_block = f"""
+## Project-Specific Rules
+
 The following are the project's CLAUDE.md and .claude/ configuration files.
 These contain project rules, conventions, and instructions you MUST follow when reviewing:
 
 {claude_context}
 
 --- End of project rules ---
+
 """
 
-    return f"""You are a senior code reviewer.
-{context_block}
-Review this merge request diff. Follow ALL rules and conventions defined above.
-Be concise. Reference specific files and line numbers.
-If the code looks good, say so briefly.
+    return f"""You are a senior software engineer conducting a thorough code review. Analyze this merge request carefully and provide constructive feedback.
 
-MR Title: {mr.title}
-MR Description: {mr.description or 'N/A'}
+{context_block}## Review Guidelines
 
-Diff:
+### 1. Code Quality
+- **Readability**: Is the code clear, well-structured, and easy to understand?
+- **Naming**: Are variables, functions, and classes named descriptively?
+- **Complexity**: Are functions/methods too complex? Should they be broken down?
+- **DRY Principle**: Is there unnecessary code duplication?
+- **Comments**: Are complex logic sections documented? Are comments helpful and up-to-date?
+- **Dead Code**: Are there unused imports, variables, or commented-out code blocks?
+
+### 2. Best Practices & Patterns
+- **Design Patterns**: Are appropriate design patterns used correctly?
+- **SOLID Principles**: Does the code follow Single Responsibility, Open/Closed, etc.?
+- **Error Handling**: Are errors handled gracefully? Are edge cases covered?
+- **Resource Management**: Are resources (files, connections, memory) properly managed?
+- **Idiomatic Code**: Does the code follow language-specific conventions and idioms?
+- **Testing**: Are there adequate tests? Do tests cover edge cases?
+
+### 3. Security
+- **Input Validation**: Are all inputs validated and sanitized?
+- **Authentication/Authorization**: Are access controls properly implemented?
+- **Sensitive Data**: Are secrets, passwords, or API keys hardcoded? Are they logged?
+- **SQL Injection**: Are database queries parameterized?
+- **XSS/CSRF**: Are web vulnerabilities addressed?
+- **Dependencies**: Are dependencies up-to-date and from trusted sources?
+- **Data Exposure**: Is sensitive information properly encrypted/protected?
+
+### 4. Performance
+- **Efficiency**: Are there obvious performance bottlenecks (N+1 queries, unnecessary loops)?
+- **Scalability**: Will this code handle increased load?
+- **Resource Usage**: Are memory and CPU usage optimized?
+- **Caching**: Should results be cached?
+
+### 5. Maintainability
+- **Modularity**: Is the code properly organized into functions/classes/modules?
+- **Coupling**: Are components loosely coupled?
+- **Documentation**: Is there sufficient documentation for complex features?
+- **Backwards Compatibility**: Does this break existing functionality?
+- **Configuration**: Are magic numbers/strings extracted to constants/config?
+
+### 6. Additional Checks
+- **Logging**: Is appropriate logging in place for debugging and monitoring?
+- **Internationalization**: Is hardcoded text externalized if needed?
+- **Accessibility**: For UI changes, are accessibility standards met?
+- **API Design**: Are APIs consistent, RESTful, and well-documented?
+- **Database**: Are migrations needed? Are indexes appropriate?
+
+## Review Instructions
+
+1. **Follow project-specific rules above** - These take precedence over general guidelines
+2. **Be specific** - Reference exact file paths and line numbers (e.g., `user_service.py:45`)
+3. **Prioritize issues** - Focus on critical security/correctness issues first
+4. **Be constructive** - Suggest solutions, not just problems
+5. **Acknowledge good practices** - Mention what was done well
+6. **Be concise** - Keep feedback clear and actionable
+
+## Output Format
+
+Structure your review as follows:
+
+**Summary**: Brief overall assessment (2-3 sentences)
+
+**Critical Issues** (if any):
+- [Issue with file:line reference and explanation]
+
+**Major Issues** (if any):
+- [Issue with file:line reference and explanation]
+
+**Minor Issues/Suggestions** (if any):
+- [Issue with file:line reference and explanation]
+
+**Positive Observations** (if any):
+- [What was done well]
+
+**Recommendation**: APPROVE / REQUEST CHANGES / COMMENT
+
+---
+
+## Merge Request Details
+
+**Title**: {mr.title}
+**Description**: {mr.description or 'N/A'}
+
+## Code Changes
+
 {diff_text}"""
 
 
