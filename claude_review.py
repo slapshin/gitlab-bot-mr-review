@@ -17,32 +17,35 @@ def load_claude_context():
     """Load CLAUDE.md and .claude/ config files from local filesystem."""
     context_parts = []
 
+    # Get the project directory from GitLab CI environment
+    project_dir = Path(os.getenv("CI_PROJECT_DIR", "."))
+    print(f"Loading context from project directory: {project_dir}")
+
     # Load standard paths
     for path in CLAUDE_MD_PATHS:
-        file_path = Path(path)
+        file_path = project_dir / path
         if file_path.exists() and file_path.is_file():
             try:
                 content = file_path.read_text(encoding="utf-8")
-                print(f"added file {file_path} content to context")
-
+                print(f"added file {path} content to context")
                 context_parts.append(f"--- {path} ---\n{content}")
             except Exception as e:
                 print(f"Warning: Could not read {path}: {e}")
                 continue
 
     # Load all other files in .claude/ directory
-    claude_dir = Path(".claude")
+    claude_dir = project_dir / ".claude"
     if claude_dir.exists() and claude_dir.is_dir():
         for file_path in claude_dir.rglob("*"):
             if file_path.is_file():
-                rel_path = str(file_path)
+                # Get relative path from project directory
+                rel_path = str(file_path.relative_to(project_dir))
                 # Skip already loaded files
                 if rel_path in CLAUDE_MD_PATHS:
                     continue
                 try:
                     content = file_path.read_text(encoding="utf-8")
-
-                    print(f"added file {file_path} content to context")
+                    print(f"added file {rel_path} content to context")
                     context_parts.append(f"--- {rel_path} ---\n{content}")
                 except Exception as e:
                     print(f"Warning: Could not read {rel_path}: {e}")
