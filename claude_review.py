@@ -23,6 +23,8 @@ def load_claude_context():
         if file_path.exists() and file_path.is_file():
             try:
                 content = file_path.read_text(encoding="utf-8")
+                print(f"added file {file_path} content to context")
+
                 context_parts.append(f"--- {path} ---\n{content}")
             except Exception as e:
                 print(f"Warning: Could not read {path}: {e}")
@@ -39,6 +41,8 @@ def load_claude_context():
                     continue
                 try:
                     content = file_path.read_text(encoding="utf-8")
+
+                    print(f"added file {file_path} content to context")
                     context_parts.append(f"--- {rel_path} ---\n{content}")
                 except Exception as e:
                     print(f"Warning: Could not read {rel_path}: {e}")

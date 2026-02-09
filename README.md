@@ -91,7 +91,16 @@ uv run claude_review.py
 
 ### Project-Specific Rules
 
-Create `.claude/CLAUDE.md` in your repository to define project-specific review guidelines:
+The bot automatically loads configuration files from your repository's `.claude/` directory to provide context-aware reviews. These files are included in the review prompt, allowing you to customize the review behavior.
+
+**Files loaded (in order):**
+
+1. `CLAUDE.md` (root level)
+2. `.claude/CLAUDE.md`
+3. `.claude/settings.json`
+4. All other files in `.claude/` directory (recursively)
+
+**Example `.claude/CLAUDE.md`:**
 
 ```markdown
 # Project Review Guidelines
@@ -99,13 +108,31 @@ Create `.claude/CLAUDE.md` in your repository to define project-specific review 
 ## Code Style
 - Use snake_case for Python functions
 - Maximum line length: 88 characters
+- Follow PEP 8 guidelines
 
 ## Testing Requirements
 - All new features must include tests
 - Maintain 80% code coverage
+- Use pytest for unit tests
+
+## Security
+- Never commit secrets or API keys
+- Sanitize all user inputs
+- Use parameterized queries for database access
+
+## Commit Messages
+- Follow conventional commits format
+- Reference issue numbers when applicable
 ```
 
-The bot will automatically load and follow these rules when reviewing merge requests.
+**Additional configuration files:**
+
+You can add other files to `.claude/` directory for additional context:
+- `.claude/rules/` - Subdirectories with specific rule files (e.g., `commit-messages.md`, `security.md`)
+- `.claude/settings.json` - JSON configuration for review preferences
+- `.claude/patterns.md` - Common patterns and anti-patterns specific to your project
+
+All files will be loaded and provided to Claude for context-aware code reviews.
 
 ## Docker
 

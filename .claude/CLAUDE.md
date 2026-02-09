@@ -39,6 +39,24 @@ Optional environment variables:
 - `CLAUDE_MODEL`: Claude model to use (default: `claude-sonnet-4-5-20250929`)
 - `MAX_DIFF_CHARS`: Maximum diff size to review (default: `100000`)
 
+## Context Loading
+
+The `load_claude_context()` function reads configuration files from the local filesystem to provide context-aware reviews:
+
+**Files loaded (in order):**
+1. `CLAUDE.md` (root level)
+2. `.claude/CLAUDE.md`
+3. `.claude/settings.json`
+4. All other files in `.claude/` directory (recursively)
+
+All loaded files are concatenated and included in the review prompt, allowing Claude to follow project-specific rules, conventions, and guidelines defined in your repository.
+
+**Implementation details:**
+- Uses Python's `pathlib` for filesystem operations
+- Gracefully handles missing files with warnings
+- Reads files with UTF-8 encoding
+- Skips binary files automatically (will fail to decode and continue)
+
 ## Package Management
 
 This project uses **uv** as the package manager for fast, reliable Python dependency management.
