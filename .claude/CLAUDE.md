@@ -21,7 +21,7 @@ This is a GitLab CI/CD script that automatically reviews merge requests using Cl
 - `build_prompt(mr, diff_text, claude_context)`: Constructs the review prompt with project rules
 - `main()`: Orchestrates the review process using CI environment variables
 
-**Claude integration**: Uses `claude-sonnet-4-5-20250929` (Sonnet 4.5) model by default (configurable via `CLAUDE_MODEL` env var) with a structured prompt that incorporates project-specific rules from .claude/ configuration.
+**Claude integration**: Uses `claude-sonnet-4-6` (Sonnet 4.6) model by default (configurable via `CLAUDE_MODEL` env var) with a structured prompt that incorporates project-specific rules from .claude/ configuration.
 
 ## Environment Configuration
 
@@ -36,7 +36,7 @@ Required environment variables (provided by GitLab CI):
 
 Optional environment variables:
 
-- `CLAUDE_MODEL`: Claude model to use (default: `claude-sonnet-4-5-20250929`)
+- `CLAUDE_MODEL`: Claude model to use (default: `claude-sonnet-4-6`)
 - `MAX_DIFF_CHARS`: Maximum diff size to review (default: `100000`)
 
 ## Context Loading

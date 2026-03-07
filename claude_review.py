@@ -202,7 +202,7 @@ def main():
     # Initialize Anthropic client with API key from environment
     api_key = os.environ["ANTHROPIC_API_KEY"]
     client = anthropic.Anthropic(api_key=api_key)
-    model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
+    model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
     msg = client.messages.create(
         model=model,
         max_tokens=4096,

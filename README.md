@@ -86,7 +86,7 @@ uv run claude_review.py
 
 **Optional:**
 
-- `CLAUDE_MODEL`: Claude model to use (default: `claude-sonnet-4-5-20250929`)
+- `CLAUDE_MODEL`: Claude model to use (default: `claude-sonnet-4-6`)
 - `MAX_DIFF_CHARS`: Maximum diff size to review (default: `100000`)
 
 ### Project-Specific Rules
