@@ -4,7 +4,7 @@ Automated merge request reviewer powered by Claude AI that runs in GitLab CI/CD 
 
 ## Features
 
-- 🤖 **AI-Powered Reviews**: Uses Claude Sonnet 4.5 for intelligent code review
+- 🤖 **AI-Powered Reviews**: Uses Claude Sonnet 4.6 for intelligent code review
 - 📋 **Context-Aware**: Loads project-specific rules from `.claude/` configuration
 - 🚀 **CI/CD Native**: Runs automatically in GitLab pipelines on MR events
 - 🐳 **Docker Ready**: Pre-built images available on GitHub Container Registry
