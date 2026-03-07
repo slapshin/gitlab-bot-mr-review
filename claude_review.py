@@ -80,7 +80,7 @@ These contain project rules, conventions, and instructions you MUST follow when 
 
 """
 
-    return f"""You are a senior software engineer conducting a thorough code review. Analyze this merge request carefully and provide constructive feedback.
+    system_content = f"""You are a senior software engineer conducting a thorough code review. Analyze this merge request carefully and provide constructive feedback.
 
 {context_block}## Review Guidelines
 
@@ -156,11 +156,9 @@ Structure your review as follows:
 **Positive Observations** (if any):
 - [What was done well]
 
-**Recommendation**: APPROVE / REQUEST CHANGES / COMMENT
+**Recommendation**: APPROVE / REQUEST CHANGES / COMMENT"""
 
----
-
-## Merge Request Details
+    user_content = f"""## Merge Request Details
 
 **Title**: {mr.title}
 **Description**: {mr.description or 'N/A'}
@@ -168,6 +166,8 @@ Structure your review as follows:
 ## Code Changes
 
 {diff_text}"""
+
+    return system_content, user_content
 
 
 def main():
@@ -197,7 +197,7 @@ def main():
     if len(diff_text) > max_chars:
         diff_text = diff_text[:max_chars] + "\n\n... (diff truncated)"
 
-    prompt = build_prompt(mr, diff_text, claude_context)
+    system_content, user_content = build_prompt(mr, diff_text, claude_context)
 
     # Initialize Anthropic client with API key from environment
     api_key = os.environ["ANTHROPIC_API_KEY"]
@@ -206,8 +206,22 @@ def main():
     msg = client.messages.create(
         model=model,
         max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
+        system=[
+            {
+                "type": "text",
+                "text": system_content,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
+        messages=[{"role": "user", "content": user_content}],
     )
+
+    usage = msg.usage
+    print(f"Tokens - input: {usage.input_tokens}, output: {usage.output_tokens}")
+    if hasattr(usage, "cache_creation_input_tokens"):
+        print(f"Cache write tokens: {usage.cache_creation_input_tokens}")
+    if hasattr(usage, "cache_read_input_tokens"):
+        print(f"Cache read tokens: {usage.cache_read_input_tokens}")
 
     review = msg.content[0].text
     mr.notes.create({"body": f"🤖 **Claude Code Review**\n\n{review}"})
