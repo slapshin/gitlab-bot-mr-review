@@ -185,13 +185,26 @@ def main():
 
     usage = msg.usage
     print(f"Tokens - input: {usage.input_tokens}, output: {usage.output_tokens}")
-    if hasattr(usage, "cache_creation_input_tokens"):
-        print(f"Cache write tokens: {usage.cache_creation_input_tokens}")
-    if hasattr(usage, "cache_read_input_tokens"):
-        print(f"Cache read tokens: {usage.cache_read_input_tokens}")
+    cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    if cache_write:
+        print(f"Cache write tokens: {cache_write}")
+    if cache_read:
+        print(f"Cache read tokens: {cache_read}")
+
+    token_parts = [
+        f"input: {usage.input_tokens}",
+        f"output: {usage.output_tokens}",
+    ]
+    if cache_write:
+        token_parts.append(f"cache write: {cache_write}")
+    if cache_read:
+        token_parts.append(f"cache read: {cache_read}")
+    token_summary = ", ".join(token_parts)
 
     review = msg.content[0].text
-    mr.notes.create({"body": f"🤖 **Claude Code Review**\n\n{review}"})
+    footer = f"\n\n---\n_Model: `{model}` · Tokens — {token_summary}_"
+    mr.notes.create({"body": f"🤖 **Claude Code Review**\n\n{review}{footer}"})
     print("Review posted successfully.")
 
 
