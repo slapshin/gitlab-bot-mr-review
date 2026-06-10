@@ -212,7 +212,9 @@ def main():
         token_parts.append(f"cache read: {cache_read}")
     token_summary = ", ".join(token_parts)
 
-    review = msg.content[0].text
+    review = "".join(
+        block.text for block in msg.content if block.type == "text"
+    )
     footer = f"\n\n---\n_Model: `{model}` · Tokens — {token_summary}_"
     mr.notes.create({"body": f"🤖 **Claude Code Review**\n\n{review}{footer}"})
     print("Review posted successfully.")
