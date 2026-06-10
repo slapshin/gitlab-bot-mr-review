@@ -180,9 +180,10 @@ def main():
 
     print(f"Model used for review: {model}")
 
+    max_tokens = int(os.getenv("ANTHROPIC_MAX_OUTPUT_TOKENS", "16000"))
     msg = client.messages.create(
         model=model,
-        max_tokens=4096,
+        max_tokens=max_tokens,
         system=[
             {
                 "type": "text",
@@ -212,9 +213,13 @@ def main():
         token_parts.append(f"cache read: {cache_read}")
     token_summary = ", ".join(token_parts)
 
-    review = "".join(
-        block.text for block in msg.content if block.type == "text"
-    )
+    if msg.stop_reason == "max_tokens":
+        print(
+            f"WARNING: response truncated at max_tokens={max_tokens}; "
+            "review may be incomplete. Increase ANTHROPIC_MAX_OUTPUT_TOKENS."
+        )
+
+    review = "".join(block.text for block in msg.content if block.type == "text")
     footer = f"\n\n---\n_Model: `{model}` · Tokens — {token_summary}_"
     mr.notes.create({"body": f"🤖 **Claude Code Review**\n\n{review}{footer}"})
     print("Review posted successfully.")
