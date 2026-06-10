@@ -128,7 +128,7 @@ Structure your review with these sections. **Omit any section that has no items*
     user_content = f"""## Merge Request Details
 
 **Title**: {mr.title}
-**Description**: {mr.description or 'N/A'}
+**Description**: {mr.description or "N/A"}
 
 ## Code Changes
 
@@ -169,7 +169,10 @@ def main():
     # Initialize Anthropic client with API key from environment
     api_key = os.environ["ANTHROPIC_API_KEY"]
     client = anthropic.Anthropic(api_key=api_key)
-    model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
+    model = os.getenv("CLAUDE_REVIEW_MODEL", "claude-sonnet-4-6")
+
+    print(f"Model used for review: {model}")
+
     msg = client.messages.create(
         model=model,
         max_tokens=4096,
