@@ -176,7 +176,7 @@ def main():
     # Initialize Anthropic client with API key from environment
     api_key = os.environ["ANTHROPIC_API_KEY"]
     client = anthropic.Anthropic(api_key=api_key)
-    model = os.getenv("CLAUDE_REVIEW_MODEL", "claude-sonnet-4-6")
+    model = os.getenv("ANTHROPIC_REVIEW_MODEL", "claude-sonnet-4-6")
 
     print(f"Model used for review: {model}")
 
