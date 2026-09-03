@@ -86,8 +86,17 @@ uv run claude_review.py
 
 **Optional:**
 
-- `CLAUDE_MODEL`: Claude model to use (default: `claude-sonnet-4-6`)
-- `MAX_DIFF_CHARS`: Maximum diff size to review (default: `100000`)
+- `ANTHROPIC_REVIEW_MODEL`: Claude model to use (default: `claude-sonnet-5`)
+- `ANTHROPIC_REVIEW_THINKING`: `auto` or `off` (default: `auto`). `auto` enables adaptive
+  thinking on models that support it, and is silently skipped on models that don't.
+- `ANTHROPIC_REVIEW_EFFORT`: `low`, `medium`, `high`, `xhigh`, or `max` (default: `high`).
+  Controls reasoning depth and token spend. `xhigh` is worth trying for deeper reviews.
+  Clamped down automatically on models that don't support the requested level.
+- `ANTHROPIC_MAX_OUTPUT_TOKENS`: Output token limit for the review (default: `16000`)
+- `MAX_DIFF_CHARS`: Maximum total diff size to review (default: `100000`). Files are
+  dropped whole when the budget is exhausted, never cut mid-hunk.
+- `MAX_FILE_CHARS`: Largest file to include in full as review context (default: `40000`)
+- `MAX_FILE_CONTEXT_CHARS`: Total budget for full file contents (default: `200000`)
 
 ### Project-Specific Rules
 
