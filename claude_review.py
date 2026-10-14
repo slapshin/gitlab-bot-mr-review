@@ -7,8 +7,9 @@ import anthropic
 import gitlab
 import gitlab.exceptions
 
-# Standard .claude paths that Claude Code uses
+# Standard agent instruction paths (AGENTS.md convention and Claude Code)
 CLAUDE_MD_PATHS = [
+    "AGENTS.md",
     "CLAUDE.md",
     ".claude/CLAUDE.md",
     ".claude/settings.json",
@@ -64,8 +65,11 @@ class ReviewError(Exception):
 
 
 def load_claude_context():
-    """Load CLAUDE.md and .claude/ config files from local filesystem."""
+    """Load AGENTS.md, CLAUDE.md and .claude/ config files from local filesystem."""
     context_parts = []
+    # Contents already loaded, so linked or copied files
+    # (e.g. CLAUDE.md -> AGENTS.md) load once
+    loaded = set()
 
     # Get the project directory from GitLab CI environment
     project_dir = Path(os.getenv("CI_PROJECT_DIR", "."))
@@ -77,6 +81,10 @@ def load_claude_context():
         if file_path.exists() and file_path.is_file():
             try:
                 content = file_path.read_text(encoding="utf-8")
+                if content in loaded:
+                    print(f"Skipped {path}: same content already loaded")
+                    continue
+                loaded.add(content)
                 print(f"Added file {path} content to context")
                 context_parts.append(f"--- {path} ---\n{content}")
             except Exception as e:
@@ -95,6 +103,10 @@ def load_claude_context():
                     continue
                 try:
                     content = file_path.read_text(encoding="utf-8")
+                    if content in loaded:
+                        print(f"Skipped {rel_path}: same content already loaded")
+                        continue
+                    loaded.add(content)
                     print(f"Added file {rel_path} content to context")
                     context_parts.append(f"--- {rel_path} ---\n{content}")
                 except Exception as e:
@@ -264,7 +276,7 @@ def build_prompt(mr, diff_text, snapshots, scope_notes, claude_context):
         context_block = f"""
 ## Project-Specific Rules
 
-The following are the project's CLAUDE.md and .claude/ configuration files.
+The following are the project's AGENTS.md, CLAUDE.md and .claude/ configuration files.
 These contain project rules, conventions, and instructions you MUST follow when reviewing:
 
 {claude_context}
@@ -425,12 +437,12 @@ def main():
         print(f"ERROR: could not fetch merge request from GitLab: {e}")
         return 1
 
-    # Load .claude/ context from local filesystem
+    # Load AGENTS.md, CLAUDE.md and .claude/ context from local filesystem
     claude_context = load_claude_context()
     if claude_context:
-        print(f"Loaded .claude/ context ({len(claude_context)} chars)")
+        print(f"Loaded project context ({len(claude_context)} chars)")
     else:
-        print("No .claude/ config found, reviewing without project rules")
+        print("No AGENTS.md, CLAUDE.md or .claude/ config found, reviewing without project rules")
 
     max_chars = int(os.getenv("MAX_DIFF_CHARS", "100000"))
     max_file_chars = int(os.getenv("MAX_FILE_CHARS", "40000"))

@@ -5,7 +5,7 @@ Automated merge request reviewer powered by Claude AI that runs in GitLab CI/CD 
 ## Features
 
 - 🤖 **AI-Powered Reviews**: Uses Claude Sonnet 4.6 for intelligent code review
-- 📋 **Context-Aware**: Loads project-specific rules from `.claude/` configuration
+- 📋 **Context-Aware**: Loads project-specific rules from `AGENTS.md`, `CLAUDE.md` and `.claude/` configuration
 - 🚀 **CI/CD Native**: Runs automatically in GitLab pipelines on MR events
 - 🐳 **Docker Ready**: Pre-built images available on GitHub Container Registry
 - ⚡ **Fast Setup**: Uses `uv` for lightning-fast dependency management
@@ -104,10 +104,13 @@ The bot automatically loads configuration files from your repository's `.claude/
 
 **Files loaded (in order):**
 
-1. `CLAUDE.md` (root level)
-2. `.claude/CLAUDE.md`
-3. `.claude/settings.json`
-4. All other files in `.claude/` directory (recursively)
+1. `AGENTS.md` (root level)
+2. `CLAUDE.md` (root level)
+3. `.claude/CLAUDE.md`
+4. `.claude/settings.json`
+5. All other files in `.claude/` directory (recursively)
+
+Files with identical content (e.g. `CLAUDE.md` symlinked to or copied from `AGENTS.md`) are loaded only once.
 
 **Example `.claude/CLAUDE.md`:**
 
@@ -200,7 +203,7 @@ The bot is a single Python script that:
 
 ### Key Components
 
-- `load_claude_context()`: Loads project rules from `.claude/` directory
+- `load_claude_context()`: Loads project rules from `AGENTS.md`, `CLAUDE.md` and `.claude/` directory
 - `get_mr_diff()`: Fetches diff data from GitLab API
 - `build_prompt()`: Constructs review prompt with context
 - `main()`: Orchestrates the review workflow
