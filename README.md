@@ -26,7 +26,7 @@ claude_review:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
-    - uv run claude_review.py
+    - uv run review.py
   variables:
     GITLAB_TOKEN: $GITLAB_TOKEN
     ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
@@ -68,7 +68,7 @@ export GITLAB_TOKEN="your-gitlab-token"
 export ANTHROPIC_API_KEY="your-anthropic-key"
 
 # Run the script
-uv run claude_review.py
+uv run review.py
 ```
 
 ## Configuration
@@ -97,6 +97,39 @@ uv run claude_review.py
   dropped whole when the budget is exhausted, never cut mid-hunk.
 - `MAX_FILE_CHARS`: Largest file to include in full as review context (default: `40000`)
 - `MAX_FILE_CONTEXT_CHARS`: Total budget for full file contents (default: `200000`)
+- `REVIEW_ENGINE`: `api` (default) or `claude-code`. See below.
+
+### Claude Code Engine
+
+With `REVIEW_ENGINE=claude-code` the bot runs the Claude Code CLI's built-in
+`/code-review` skill on the MR commit range (`base_sha..head_sha`) inside the
+checked-out repository, instead of sending a prompt to the Messages API. Claude
+Code loads `CLAUDE.md` and `.claude/` rules itself and can read any file in
+the repository, not just the diff. Its tools are restricted to reading files
+and `git diff/log/show/blame`.
+
+```yaml
+claude_review:
+  image: ghcr.io/slapshin/gitlab-bot-mr-review:<tag>
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true
+  variables:
+    REVIEW_ENGINE: claude-code
+  script:
+    - uv run /app/review.py
+```
+
+Options for this engine:
+
+- `ANTHROPIC_REVIEW_EFFORT`: passed to `/code-review` as its level (default: `high`)
+- `ANTHROPIC_REVIEW_MODEL`: optional; unset uses the Claude Code default model
+- `CLAUDE_CODE_MAX_BUDGET_USD`: spend cap per review (default: `5`)
+- `CLAUDE_CODE_TIMEOUT_SECONDS`: wall-clock limit (default: `1800`)
+
+Commits missing from a shallow clone are fetched automatically; if that fails,
+set `GIT_DEPTH: 0` on the job. The API-engine options (thinking, output tokens,
+diff and file budgets) do not apply.
 
 ### Project-Specific Rules
 
@@ -194,19 +227,19 @@ git push origin v1.0.0
 
 ## Architecture
 
-The bot is a single Python script that:
+The bot fetches the merge request from GitLab, hands it to the review engine
+selected by `REVIEW_ENGINE`, and posts the result as an MR note with 🤖 branding.
 
-1. **Loads Context**: Reads `.claude/` configuration from the source branch
-2. **Fetches Diff**: Retrieves merge request changes via GitLab API
-3. **AI Review**: Analyzes code with Claude AI using project-specific rules
-4. **Posts Comment**: Adds review as an MR comment with 🤖 branding
+### Modules
 
-### Key Components
+- `review.py`: Entry point — reads CI variables, fetches the MR, runs the engine, posts the note
+- `api_engine.py`: `REVIEW_ENGINE=api` — builds a prompt from the diff, full changed files and project rules (`AGENTS.md`, `CLAUDE.md`, `.claude/`) and sends it to the Messages API
+- `claude_code_engine.py`: `REVIEW_ENGINE=claude-code` — runs the Claude Code CLI `/code-review` skill in the checked-out repository
+- `common.py`: `Review` result and `ReviewError`, shared by the engines
 
-- `load_claude_context()`: Loads project rules from `AGENTS.md`, `CLAUDE.md` and `.claude/` directory
-- `get_mr_diff()`: Fetches diff data from GitLab API
-- `build_prompt()`: Constructs review prompt with context
-- `main()`: Orchestrates the review workflow
+Each engine exposes `run(project, mr, payload)`, which returns a `Review`,
+returns `None` when there is nothing to review, or raises `ReviewError` with a
+message that is posted to the MR.
 
 ## Dependencies
 

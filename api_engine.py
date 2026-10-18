@@ -1,11 +1,13 @@
-# scripts/claude_review.py
+# Review engine that sends the MR diff, full changed files and project rules
+# to the Claude Messages API in a single request.
 import os
-import sys
 from pathlib import Path
 
 import anthropic
-import gitlab
 import gitlab.exceptions
+
+from common import EFFORT_ORDER, Review, ReviewError
+
 
 # Standard agent instruction paths (AGENTS.md convention and Claude Code)
 CLAUDE_MD_PATHS = [
@@ -14,11 +16,6 @@ CLAUDE_MD_PATHS = [
     ".claude/CLAUDE.md",
     ".claude/settings.json",
 ]
-
-NOTE_HEADER = "🤖 **Claude Code Review**"
-
-# Effort levels, ordered from cheapest to most thorough.
-EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max")
 
 _XHIGH = ("low", "medium", "high", "xhigh", "max")
 _NO_XHIGH = ("low", "medium", "high", "max")
@@ -58,10 +55,6 @@ SKIP_FILENAMES = frozenset(
     }
 )
 SKIP_DIR_PARTS = frozenset({"node_modules", "vendor", ".venv", "__pycache__"})
-
-
-class ReviewError(Exception):
-    """A failure worth reporting back to the merge request."""
 
 
 def load_claude_context():
@@ -405,37 +398,11 @@ def request_review(client, model, system_content, user_content, max_tokens, thin
         raise ReviewError(f"Could not reach the Anthropic API: {e}")
 
 
-def post_note(mr, body):
-    try:
-        mr.notes.create({"body": body})
-    except gitlab.exceptions.GitlabError as e:
-        print(f"ERROR: could not post note to MR: {e}")
-        return False
-    return True
-
-
-def main():
-    try:
-        gitlab_url = os.environ["CI_SERVER_URL"]
-        project_id = os.environ["CI_PROJECT_ID"]
-        mr_iid = os.environ["CI_MERGE_REQUEST_IID"]
-        api_key = os.environ["ANTHROPIC_API_KEY"]
-    except KeyError as e:
-        print(f"ERROR: required environment variable {e.args[0]} is not set")
-        return 1
-
-    # Try GITLAB_TOKEN first, fallback to CI_JOB_TOKEN
-    gitlab_token = os.getenv("GITLAB_TOKEN") or os.environ["CI_JOB_TOKEN"]
-
-    gl = gitlab.Gitlab(gitlab_url, private_token=gitlab_token)
-
-    try:
-        project = gl.projects.get(project_id)
-        mr = project.mergerequests.get(mr_iid)
-        payload = mr.changes()
-    except gitlab.exceptions.GitlabError as e:
-        print(f"ERROR: could not fetch merge request from GitLab: {e}")
-        return 1
+def run(project, mr, payload):
+    """Review the MR through the Messages API; return None when there is nothing to review."""
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ReviewError("`ANTHROPIC_API_KEY` is not set.")
 
     # Load AGENTS.md, CLAUDE.md and .claude/ context from local filesystem
     claude_context = load_claude_context()
@@ -462,8 +429,7 @@ def main():
 
     diff_text = "\n".join(format_diff(c) for c in kept)
     if not diff_text.strip():
-        print("No changes to review")
-        return 0
+        return None
 
     # Full file contents let the model judge hunks against surrounding code.
     head_sha = (payload.get("diff_refs") or {}).get("head_sha") or getattr(mr, "sha", None)
@@ -494,14 +460,7 @@ def main():
     print(f"Model used for review: {model}")
     print(f"Thinking: {'adaptive' if thinking else 'off'}, effort: {effort or 'default'}")
 
-    try:
-        msg = request_review(
-            client, model, system_content, user_content, max_tokens, thinking, effort
-        )
-    except ReviewError as e:
-        print(f"ERROR: {e}")
-        post_note(mr, f"{NOTE_HEADER}\n\n⚠️ Review could not be completed: {e}")
-        return 1
+    msg = request_review(client, model, system_content, user_content, max_tokens, thinking, effort)
 
     usage = msg.usage
     print(f"Tokens - input: {usage.input_tokens}, output: {usage.output_tokens}")
@@ -525,13 +484,9 @@ def main():
     if msg.stop_reason == "refusal":
         details = getattr(msg, "stop_details", None)
         category = getattr(details, "category", None) or "unspecified"
-        print(f"ERROR: the model declined to review this MR (category: {category})")
-        post_note(
-            mr,
-            f"{NOTE_HEADER}\n\n⚠️ The model declined to review this merge request "
-            f"(category: `{category}`). No review was produced.",
+        raise ReviewError(
+            f"The model declined to review this merge request (category: `{category}`)."
         )
-        return 1
 
     if msg.stop_reason == "max_tokens":
         print(
@@ -541,9 +496,7 @@ def main():
 
     review = "".join(block.text for block in msg.content if block.type == "text").strip()
     if not review:
-        print("ERROR: the model returned an empty review")
-        post_note(mr, f"{NOTE_HEADER}\n\n⚠️ The model returned an empty review.")
-        return 1
+        raise ReviewError("The model returned an empty review.")
 
     config_parts = [f"Model: `{model}`"]
     if thinking:
@@ -555,14 +508,4 @@ def main():
     if msg.stop_reason == "max_tokens":
         footer_lines.append("⚠️ This review was truncated at the output token limit.")
     footer_lines.append(f"{' · '.join(config_parts)} · Tokens — {token_summary}")
-    footer = "\n\n---\n" + "\n\n".join(f"_{line}_" for line in footer_lines)
-
-    if not post_note(mr, f"{NOTE_HEADER}\n\n{review}{footer}"):
-        return 1
-
-    print("Review posted successfully.")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return Review(review, footer_lines)

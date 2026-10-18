@@ -7,18 +7,17 @@ This is a GitLab CI/CD script that automatically reviews merge requests using Cl
 
 ## Architecture
 
-**Single Python script** (`claude_review.py`):
+Runs in a GitLab CI/CD pipeline triggered by merge request events.
+Workflow: Fetch MR → run the review engine selected by `REVIEW_ENGINE` → Post review note.
 
-- Runs in GitLab CI/CD pipeline triggered by merge request events
-- Direct integration with GitLab API (via python-gitlab) and Anthropic API (via anthropic SDK)
-- Workflow: Load .claude/ context → Fetch MR diff → Analyze with Claude → Post review comment
+**Modules**:
 
-**Key functions**:
+- `review.py`: Entry point (`uv run review.py`) — CI variables, GitLab API (python-gitlab), engine selection via the `ENGINES` map, note posting
+- `api_engine.py`: `REVIEW_ENGINE=api` (default) — `load_claude_context()` loads AGENTS.md, CLAUDE.md and .claude/ files, `select_changes()` budgets the diff, `build_prompt()` builds the prompt, `request_review()` calls the Messages API (anthropic SDK)
+- `claude_code_engine.py`: `REVIEW_ENGINE=claude-code` — runs `claude -p "/code-review <effort> base..head"` in the CI checkout with read-only tools
+- `common.py`: `Review` (note text + footer lines), `ReviewError`, `EFFORT_ORDER`
 
-- `load_claude_context()`: Loads CLAUDE.md and .claude/ configuration files from the local filesystem for context-aware reviews
-- `get_mr_diff(project, mr_iid)`: Fetches diff data from GitLab API
-- `build_prompt(mr, diff_text, claude_context)`: Constructs the review prompt with project rules
-- `main()`: Orchestrates the review process using CI environment variables
+Engines expose `run(project, mr, payload)` and never talk to GitLab notes; they return a `Review`, `None` (nothing to review), or raise `ReviewError`, which `review.py` posts to the MR. A new engine is a new module plus an `ENGINES` entry.
 
 **Claude integration**: Uses `claude-sonnet-4-6` (Sonnet 4.6) model by default (configurable via `CLAUDE_MODEL` env var) with a structured prompt that incorporates project-specific rules from .claude/ configuration.
 
@@ -72,7 +71,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
 # Run the script locally (requires CI env vars)
-uv run claude_review.py
+uv run review.py
 ```
 
 ### Dependencies
@@ -91,7 +90,7 @@ Add to your `.gitlab-ci.yml`:
 claude_review:
   image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
   script:
-    - uv run claude_review.py
+    - uv run review.py
   only:
     - merge_requests
   variables:
