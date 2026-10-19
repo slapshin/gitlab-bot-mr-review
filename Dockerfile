@@ -1,6 +1,9 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-ARG CLAUDE_CODE_VERSION=2.1.302
+# Claude Code baked into the image: a release (e.g. 2.1.302) or a channel.
+# The claude-code engine still updates it before each review unless the job
+# pins CLAUDE_CODE_VERSION, so this only sets the starting point.
+ARG CLAUDE_CODE_VERSION=latest
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -9,8 +12,9 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && git config --system --add safe.directory '*' \
-    && curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CODE_VERSION}" \
+    && git config --system --add safe.directory '*'
+
+RUN curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CODE_VERSION}" \
     && install -m 0755 "$(readlink -f /root/.local/bin/claude)" /usr/local/bin/claude \
     && rm -rf /root/.local/bin/claude /root/.local/share/claude
 

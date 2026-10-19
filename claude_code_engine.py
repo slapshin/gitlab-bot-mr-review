@@ -3,9 +3,15 @@
 import json
 import os
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from common import EFFORT_ORDER, Review, ReviewError
+
+# Each release channel file holds the version it currently points to.
+RELEASES_URL = "https://downloads.claude.ai/claude-code-releases"
+CHANNELS = ("latest", "stable")
 
 # Read-only tools: the review may explore the repository, never modify it.
 ALLOWED_TOOLS = ",".join(
@@ -55,7 +61,69 @@ def resolve_effort():
     return "high"
 
 
-def run_review(project_dir, base_sha, head_sha, effort, model, budget_usd, timeout):
+def installed_version(cli):
+    """Return the version of a claude binary, or None when it cannot run."""
+    try:
+        completed = subprocess.run([cli, "--version"], capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
+    if completed.returncode != 0 or not completed.stdout.strip():
+        return None
+    # Prints e.g. "2.1.302 (Claude Code)".
+    return completed.stdout.split()[0]
+
+
+def channel_version(channel):
+    with urllib.request.urlopen(f"{RELEASES_URL}/{channel}", timeout=10) as response:
+        return response.read().decode().strip()
+
+
+def resolve_cli():
+    """Return the claude binary to run, updating it to CLAUDE_CODE_VERSION first.
+
+    An unset CLAUDE_CODE_VERSION follows the latest channel, so every review
+    runs the newest release even on an old image. A channel that cannot be
+    updated falls back to the image's binary; a pinned version must install.
+    """
+    target = os.getenv("CLAUDE_CODE_VERSION", "").strip() or "latest"
+    current = installed_version("claude")
+
+    wanted = target
+    if target in CHANNELS:
+        try:
+            wanted = channel_version(target)
+        except (urllib.error.URLError, OSError) as e:
+            print(f"Warning: could not resolve the {target} Claude Code release ({e}); "
+                  f"using the image's {current}")
+            return "claude"
+
+    if wanted == current:
+        print(f"Claude Code {current} is up to date ({target})")
+        return "claude"
+
+    print(f"Installing Claude Code {wanted} ({target}), image has {current or 'none'}")
+    installed = Path.home() / ".local" / "bin" / "claude"
+    try:
+        completed = subprocess.run(
+            ["claude", "install", wanted], capture_output=True, text=True, timeout=300
+        )
+        error = completed.stderr.strip() if completed.returncode != 0 else None
+    except FileNotFoundError:
+        raise ReviewError("The `claude` CLI is not installed in this image.")
+    except subprocess.TimeoutExpired:
+        error = "install timed out"
+
+    if error is None and installed_version(str(installed)) == wanted:
+        return str(installed)
+
+    reason = error or f"{installed} does not report version {wanted}"
+    if target in CHANNELS:
+        print(f"Warning: could not update Claude Code ({reason}); using the image's {current}")
+        return "claude"
+    raise ReviewError(f"Could not install pinned Claude Code {target}: {reason}")
+
+
+def run_review(cli, project_dir, base_sha, head_sha, effort, model, budget_usd, timeout):
     """Run /code-review on base..head and return (review text, cost in USD)."""
     ensure_commit(project_dir, base_sha)
     ensure_commit(project_dir, head_sha)
@@ -64,7 +132,7 @@ def run_review(project_dir, base_sha, head_sha, effort, model, budget_usd, timeo
     # and, unlike three-dot, works in a shallow clone.
     target = f"{base_sha}..{head_sha}"
     command = [
-        "claude",
+        cli,
         "-p",
         f"/code-review {effort} {target}",
         "--output-format",
@@ -143,12 +211,14 @@ def run(project, mr, payload):
     budget = float(os.getenv("CLAUDE_CODE_MAX_BUDGET_USD", "5"))
     timeout = int(os.getenv("CLAUDE_CODE_TIMEOUT_SECONDS", "1800"))
 
+    cli = resolve_cli()
+    version = installed_version(cli)
     review, cost = run_review(
-        os.getenv("CI_PROJECT_DIR", "."), base_sha, head_sha, effort, model, budget, timeout
+        cli, os.getenv("CI_PROJECT_DIR", "."), base_sha, head_sha, effort, model, budget, timeout
     )
     print(f"Claude Code review cost: ${cost:.2f}")
 
-    config_parts = ["Engine: Claude Code `/code-review`", f"effort: `{effort}`"]
+    config_parts = [f"Engine: Claude Code {version} `/code-review`", f"effort: `{effort}`"]
     if model:
         config_parts.append(f"model: `{model}`")
     config_parts.append(f"commit: `{head_sha[:8]}`")

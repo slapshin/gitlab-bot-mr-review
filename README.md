@@ -126,6 +126,11 @@ Options for this engine:
 - `ANTHROPIC_REVIEW_MODEL`: optional; unset uses the Claude Code default model
 - `CLAUDE_CODE_MAX_BUDGET_USD`: spend cap per review (default: `5`)
 - `CLAUDE_CODE_TIMEOUT_SECONDS`: wall-clock limit (default: `1800`)
+- `CLAUDE_CODE_VERSION`: Claude Code release to review with, e.g. `2.1.302`, or a
+  channel, `latest` or `stable`. Unset means `latest`: before each review the
+  bot updates the CLI baked into the image to the newest release, and falls back
+  to the baked one if the update fails. A pinned version must install, or the
+  review fails. The note footer shows the version that ran.
 
 Commits missing from a shallow clone are fetched automatically; if that fails,
 set `GIT_DEPTH: 0` on the job. The API-engine options (thinking, output tokens,
