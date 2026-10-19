@@ -193,6 +193,54 @@ def run_review(cli, project_dir, base_sha, head_sha, effort, model, budget_usd, 
     return review, cost
 
 
+def parse_findings(review):
+    """Return the findings list from /code-review output, or None if it is not JSON.
+
+    In print mode /code-review answers with a JSON array of findings, possibly
+    wrapped in a code fence or surrounded by prose.
+    """
+    start, end = review.find("["), review.rfind("]")
+    if start == -1 or end < start:
+        return None
+    try:
+        findings = json.loads(review[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(findings, list) or not all(isinstance(f, dict) for f in findings):
+        return None
+    return findings
+
+
+def format_findings(findings, web_url, head_sha):
+    """Render /code-review findings as Markdown with links to the reviewed commit."""
+    if not findings:
+        return "✅ No issues found."
+
+    lines = [f"Found **{len(findings)}** issue{'s' if len(findings) != 1 else ''}:"]
+    for number, finding in enumerate(findings, 1):
+        title = finding.get("short_summary") or finding.get("summary") or "Issue"
+        tags = [f"`{tag}`" for tag in (finding.get("category"), finding.get("verdict")) if tag]
+        heading = f"### {number}. {title}"
+        if tags:
+            heading += " · " + " ".join(tags)
+        lines += ["", heading]
+
+        path = finding.get("file")
+        if path:
+            line = finding.get("line")
+            location = f"{path}:{line}" if line else path
+            anchor = f"#L{line}" if line else ""
+            lines.append(f"📄 [`{location}`]({web_url}/-/blob/{head_sha}/{path}{anchor})")
+
+        summary = finding.get("summary")
+        if summary and summary != title:
+            lines += ["", summary]
+        scenario = finding.get("failure_scenario")
+        if scenario:
+            lines += ["", f"**Failure scenario:** {scenario}"]
+    return "\n".join(lines)
+
+
 def run(project, mr, payload):
     """Review the MR with /code-review in the CI checkout.
 
@@ -217,6 +265,10 @@ def run(project, mr, payload):
         cli, os.getenv("CI_PROJECT_DIR", "."), base_sha, head_sha, effort, model, budget, timeout
     )
     print(f"Claude Code review cost: ${cost:.2f}")
+
+    findings = parse_findings(review)
+    if findings is not None:
+        review = format_findings(findings, project.web_url, head_sha)
 
     config_parts = [f"Engine: Claude Code {version} `/code-review`", f"effort: `{effort}`"]
     if model:
