@@ -108,6 +108,12 @@ Code loads `CLAUDE.md` and `.claude/` rules itself and can read any file in
 the repository, not just the diff. Its tools are restricted to reading files
 and `git diff/log/show/blame`.
 
+The bot appends review guidance to the Claude Code system prompt: report only
+real problems (no style nitpicks), return no findings when the change is sound,
+and tag each finding with a severity (`critical`, `high`, `medium`, `low`). The
+note lists findings most severe first; a clean review says everything looks good.
+Lower `ANTHROPIC_REVIEW_EFFORT` reports fewer, higher-confidence findings.
+
 ```yaml
 claude_review:
   image: ghcr.io/slapshin/gitlab-bot-mr-review:<tag>

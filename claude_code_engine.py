@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -26,6 +27,31 @@ ALLOWED_TOOLS = ",".join(
         "Bash(git blame:*)",
     ]
 )
+
+# Appended to the Claude Code system prompt for every review.
+REVIEW_GUIDANCE = """\
+# Merge request review guidance
+
+- Report only problems worth a reviewer's time: bugs, security issues, data
+  loss, broken behavior, or clear maintainability hazards. Do not nitpick
+  style, formatting, naming, or subjective preferences.
+- Do not look for problems just to have something to report. If the change
+  is sound, return an empty findings array; that is a good outcome.
+- Give every finding a `severity` field, one of:
+  - `critical`: security hole, data loss, crash, or breakage in a main flow;
+    must be fixed before merging
+  - `high`: a real bug with a concrete failure scenario
+  - `medium`: an edge-case bug or a risky pattern likely to cause one
+  - `low`: a minor issue that is worth fixing but safe to merge as is
+"""
+
+# Severity order, most severe first, and the badge shown for each level.
+SEVERITY_BADGES = {
+    "critical": "🔴 Critical",
+    "high": "🟠 High",
+    "medium": "🟡 Medium",
+    "low": "🔵 Low",
+}
 
 
 def ensure_commit(project_dir, sha):
@@ -147,25 +173,31 @@ def run_review(cli, project_dir, base_sha, head_sha, effort, model, budget_usd, 
     if model:
         command += ["--model", model]
     # Claude Code loads CLAUDE.md on its own but not the AGENTS.md convention.
+    appended = [REVIEW_GUIDANCE]
     agents_md = Path(project_dir) / "AGENTS.md"
     if agents_md.is_file() and not (Path(project_dir) / "CLAUDE.md").exists():
         print("Appending AGENTS.md to the Claude Code system prompt")
-        command += ["--append-system-prompt-file", str(agents_md)]
+        appended.append(agents_md.read_text(encoding="utf-8", errors="replace"))
 
     print(f"Running Claude Code /code-review {effort} on {target}")
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=project_dir,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except FileNotFoundError:
-        raise ReviewError("The `claude` CLI is not installed in this image.")
-    except subprocess.TimeoutExpired:
-        raise ReviewError(f"Claude Code review timed out after {timeout}s.")
+    # A file, not an argument: AGENTS.md can exceed the per-argument size limit.
+    with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8") as prompt_file:
+        prompt_file.write("\n\n".join(appended))
+        prompt_file.flush()
+        command += ["--append-system-prompt-file", prompt_file.name]
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=project_dir,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except FileNotFoundError:
+            raise ReviewError("The `claude` CLI is not installed in this image.")
+        except subprocess.TimeoutExpired:
+            raise ReviewError(f"Claude Code review timed out after {timeout}s.")
 
     if completed.stderr.strip():
         print(completed.stderr.strip())
@@ -211,16 +243,37 @@ def parse_findings(review):
     return findings
 
 
+def severity_of(finding):
+    return str(finding.get("severity") or "").strip().lower()
+
+
+def severity_rank(finding, severities):
+    """Sort key: known severities most severe first, unknown ones last."""
+    severity = severity_of(finding)
+    return severities.index(severity) if severity in severities else len(severities)
+
+
 def format_findings(findings, web_url, head_sha):
     """Render /code-review findings as Markdown with links to the reviewed commit."""
     if not findings:
-        return "✅ No issues found."
+        return "✅ Everything looks good, no issues found."
 
-    lines = [f"Found **{len(findings)}** issue{'s' if len(findings) != 1 else ''}:"]
+    severities = list(SEVERITY_BADGES)
+    findings = sorted(findings, key=lambda f: severity_rank(f, severities))
+    counts = [
+        f"{sum(severity_of(f) == level for f in findings)} {level}"
+        for level in severities
+        if any(severity_of(f) == level for f in findings)
+    ]
+    summary_line = f"Found **{len(findings)}** issue{'s' if len(findings) != 1 else ''}"
+    if counts:
+        summary_line += f" ({', '.join(counts)})"
+    lines = [summary_line + ":"]
     for number, finding in enumerate(findings, 1):
         title = finding.get("short_summary") or finding.get("summary") or "Issue"
         tags = [f"`{tag}`" for tag in (finding.get("category"), finding.get("verdict")) if tag]
-        heading = f"### {number}. {title}"
+        badge = SEVERITY_BADGES.get(severity_of(finding))
+        heading = f"### {number}. {badge + ': ' if badge else ''}{title}"
         if tags:
             heading += " · " + " ".join(tags)
         lines += ["", heading]
