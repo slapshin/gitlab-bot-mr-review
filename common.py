@@ -11,7 +11,9 @@ class ReviewError(Exception):
 
 @dataclass
 class Review:
-    """A finished review: the note text and the footer lines describing the run."""
+    """A finished review: the note text, the footer lines describing the run,
+    and whether the review found nothing that should block merging."""
 
     text: str
     footer_lines: list[str] = field(default_factory=list)
+    approved: bool = False

@@ -98,6 +98,23 @@ uv run review.py
 - `MAX_FILE_CHARS`: Largest file to include in full as review context (default: `40000`)
 - `MAX_FILE_CONTEXT_CHARS`: Total budget for full file contents (default: `200000`)
 - `REVIEW_ENGINE`: `api` (default) or `claude-code`. See below.
+- `REVIEW_APPROVED_LABEL`: label put on the MR when the review approves it
+  (default: `ai-approved`; set to an empty string to disable). See below.
+
+### Approval Label
+
+After each review the bot adds `REVIEW_APPROVED_LABEL` to the MR if the review
+approves it, and removes the label otherwise, so the label always reflects the
+latest push. GitLab creates the label in the project if it does not exist yet.
+
+- `claude-code` engine: approved when every finding is rated `medium` or `low`
+  (no `critical` or `high`). If triage did not run, findings are unrated and
+  the MR is not approved.
+- `api` engine: approved when the review's verdict is **APPROVE** or
+  **APPROVE WITH SUGGESTIONS**, and the review was not truncated.
+
+A failed review, or an MR with nothing to review, removes the label. Updating
+labels needs `GITLAB_TOKEN`; `CI_JOB_TOKEN` cannot edit merge requests.
 
 ### Claude Code Engine
 

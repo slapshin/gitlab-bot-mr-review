@@ -11,6 +11,7 @@ import claude_code_engine
 from common import ReviewError
 
 NOTE_HEADER = "🤖 **Claude Code Review**"
+DEFAULT_APPROVED_LABEL = "ai-approved"
 
 # REVIEW_ENGINE value -> engine module exposing run(project, mr, payload).
 ENGINES = {
@@ -35,6 +36,25 @@ def post_note(mr, body):
         print(f"ERROR: could not post note to MR: {e}")
         return False
     return True
+
+
+def sync_approved_label(project, mr, approved):
+    """Add the approval label after an approving review and remove it otherwise,
+    so it always reflects the latest review run."""
+    label = os.getenv("REVIEW_APPROVED_LABEL", DEFAULT_APPROVED_LABEL).strip()
+    if not label:
+        return
+    has_label = label in mr.labels
+    if approved == has_label:
+        return
+
+    action = "add_labels" if approved else "remove_labels"
+    try:
+        project.mergerequests.update(mr.iid, {action: label})
+    except gitlab.exceptions.GitlabError as e:
+        print(f"Warning: could not update label {label!r} on MR: {e}")
+        return
+    print(f"{'Added' if approved else 'Removed'} label {label!r}")
 
 
 def select_engine():
@@ -75,6 +95,7 @@ def main():
         review = engine.run(project, mr, payload)
     except ReviewError as e:
         print(f"ERROR: {e}")
+        sync_approved_label(project, mr, approved=False)
         post_note(
             mr, f"{NOTE_HEADER}\n\n⚠️ Review could not be completed: {e}\n\n---\n_{version_line}_"
         )
@@ -82,7 +103,10 @@ def main():
 
     if review is None:
         print("No changes to review")
+        sync_approved_label(project, mr, approved=False)
         return 0
+
+    sync_approved_label(project, mr, review.approved)
 
     footer_lines = review.footer_lines + [version_line]
     footer = "\n\n---\n" + "\n\n".join(f"_{line}_" for line in footer_lines)

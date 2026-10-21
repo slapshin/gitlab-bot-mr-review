@@ -55,6 +55,9 @@ SEVERITY_BADGES = {
     "low": "🔵",
 }
 
+# Severities that still let the review approve the MR.
+APPROVABLE_SEVERITIES = ("medium", "low")
+
 
 # /code-review follows its own output format and ignores the severity and
 # no-nitpick guidance above, so a separate Messages API call rates its findings.
@@ -430,6 +433,10 @@ def run(project, mr, payload):
     if findings is not None:
         findings, nitpicks, triage_model = triage_findings(findings)
         review = format_findings(findings, project.web_url, head_sha, nitpicks or 0)
+    # Unparsed output or unrated findings never approve.
+    approved = findings is not None and all(
+        severity_of(f) in APPROVABLE_SEVERITIES for f in findings
+    )
 
     config_parts = [f"Engine: Claude Code {version} `/code-review`", f"effort: `{effort}`"]
     if model:
@@ -438,4 +445,4 @@ def run(project, mr, payload):
         config_parts.append(f"triage: `{triage_model}`")
     config_parts.append(f"commit: `{head_sha[:8]}`")
     config_parts.append(f"cost: ${cost:.2f}")
-    return Review(review, [" · ".join(config_parts)])
+    return Review(review, [" · ".join(config_parts)], approved)

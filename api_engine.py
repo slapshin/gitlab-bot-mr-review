@@ -1,6 +1,7 @@
 # Review engine that sends the MR diff, full changed files and project rules
 # to the Claude Messages API in a single request.
 import os
+import re
 from pathlib import Path
 
 import anthropic
@@ -16,6 +17,12 @@ CLAUDE_MD_PATHS = [
     ".claude/CLAUDE.md",
     ".claude/settings.json",
 ]
+
+# Matches the verdict line the prompt asks for, e.g. "**Verdict**: **APPROVE**".
+VERDICT_PATTERN = re.compile(
+    r"Verdict\W*(APPROVE WITH SUGGESTIONS|APPROVE|REQUEST CHANGES)", re.IGNORECASE
+)
+APPROVING_VERDICTS = ("APPROVE", "APPROVE WITH SUGGESTIONS")
 
 _XHIGH = ("low", "medium", "high", "xhigh", "max")
 _NO_XHIGH = ("low", "medium", "high", "max")
@@ -359,6 +366,12 @@ Structure your review with these sections. **Omit any section that has no items*
     return system_content, "\n\n".join(sections)
 
 
+def is_approved(review):
+    """True when the review's last verdict line approves the MR."""
+    verdicts = VERDICT_PATTERN.findall(review)
+    return bool(verdicts) and verdicts[-1].upper() in APPROVING_VERDICTS
+
+
 def request_review(client, model, system_content, user_content, max_tokens, thinking, effort):
     """Call the Messages API, streaming so long reviews don't hit the request timeout."""
     kwargs = {
@@ -508,4 +521,6 @@ def run(project, mr, payload):
     if msg.stop_reason == "max_tokens":
         footer_lines.append("⚠️ This review was truncated at the output token limit.")
     footer_lines.append(f"{' · '.join(config_parts)} · Tokens — {token_summary}")
-    return Review(review, footer_lines)
+    # A truncated review may have cut off the issues that would block it.
+    approved = msg.stop_reason != "max_tokens" and is_approved(review)
+    return Review(review, footer_lines, approved)

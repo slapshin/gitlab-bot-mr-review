@@ -15,9 +15,9 @@ Workflow: Fetch MR → run the review engine selected by `REVIEW_ENGINE` → Pos
 - `review.py`: Entry point (`uv run review.py`) — CI variables, GitLab API (python-gitlab), engine selection via the `ENGINES` map, note posting
 - `api_engine.py`: `REVIEW_ENGINE=api` (default) — `load_claude_context()` loads AGENTS.md, CLAUDE.md and .claude/ files, `select_changes()` budgets the diff, `build_prompt()` builds the prompt, `request_review()` calls the Messages API (anthropic SDK)
 - `claude_code_engine.py`: `REVIEW_ENGINE=claude-code` — runs `claude -p "/code-review <effort> base..head"` in the CI checkout with read-only tools
-- `common.py`: `Review` (note text + footer lines), `ReviewError`, `EFFORT_ORDER`
+- `common.py`: `Review` (note text + footer lines + `approved`), `ReviewError`, `EFFORT_ORDER`
 
-Engines expose `run(project, mr, payload)` and never talk to GitLab notes; they return a `Review`, `None` (nothing to review), or raise `ReviewError`, which `review.py` posts to the MR. A new engine is a new module plus an `ENGINES` entry.
+Engines expose `run(project, mr, payload)` and never talk to GitLab notes; they return a `Review`, `None` (nothing to review), or raise `ReviewError`, which `review.py` posts to the MR. `review.py` adds or removes the `REVIEW_APPROVED_LABEL` label (default `ai-approved`) from `Review.approved`. A new engine is a new module plus an `ENGINES` entry.
 
 **Claude integration**: Uses `claude-sonnet-4-6` (Sonnet 4.6) model by default (configurable via `CLAUDE_MODEL` env var) with a structured prompt that incorporates project-specific rules from .claude/ configuration.
 
