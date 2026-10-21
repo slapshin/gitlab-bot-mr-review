@@ -27,4 +27,9 @@ RUN uv sync --frozen --no-dev
 
 COPY review.py common.py api_engine.py claude_code_engine.py ./
 
+# Bot build identity shown in every MR note, set by the image build workflow.
+ARG BOT_VERSION=dev
+ARG BOT_COMMIT=unknown
+ENV BOT_VERSION=${BOT_VERSION} BOT_COMMIT=${BOT_COMMIT}
+
 ENTRYPOINT ["uv", "run", "/app/review.py"]

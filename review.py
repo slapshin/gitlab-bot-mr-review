@@ -19,6 +19,15 @@ ENGINES = {
 }
 
 
+def bot_version():
+    """Describe the running bot build, e.g. "main (16264cbe)", from the image's build args."""
+    version = os.getenv("BOT_VERSION", "").strip() or "dev"
+    commit = os.getenv("BOT_COMMIT", "").strip()
+    if commit and commit != "unknown":
+        return f"{version} (`{commit[:8]}`)"
+    return version
+
+
 def post_note(mr, body):
     try:
         mr.notes.create({"body": body})
@@ -59,19 +68,24 @@ def main():
         print(f"ERROR: could not fetch merge request from GitLab: {e}")
         return 1
 
+    version_line = f"Review bot: {bot_version()}"
+    print(version_line)
     engine = select_engine()
     try:
         review = engine.run(project, mr, payload)
     except ReviewError as e:
         print(f"ERROR: {e}")
-        post_note(mr, f"{NOTE_HEADER}\n\n⚠️ Review could not be completed: {e}")
+        post_note(
+            mr, f"{NOTE_HEADER}\n\n⚠️ Review could not be completed: {e}\n\n---\n_{version_line}_"
+        )
         return 1
 
     if review is None:
         print("No changes to review")
         return 0
 
-    footer = "\n\n---\n" + "\n\n".join(f"_{line}_" for line in review.footer_lines)
+    footer_lines = review.footer_lines + [version_line]
+    footer = "\n\n---\n" + "\n\n".join(f"_{line}_" for line in footer_lines)
     if not post_note(mr, f"{NOTE_HEADER}\n\n{review.text}{footer}"):
         return 1
 

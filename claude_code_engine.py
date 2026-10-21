@@ -321,6 +321,9 @@ def run(project, mr, payload):
 
     findings = parse_findings(review)
     if findings is not None:
+        unrated = sum(severity_of(f) not in SEVERITY_BADGES for f in findings)
+        if unrated:
+            print(f"Warning: {unrated} of {len(findings)} findings have no known severity")
         review = format_findings(findings, project.web_url, head_sha)
 
     config_parts = [f"Engine: Claude Code {version} `/code-review`", f"effort: `{effort}`"]
