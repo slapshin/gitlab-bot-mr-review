@@ -21,11 +21,11 @@ ENGINES = {
 
 
 def bot_version():
-    """Describe the running bot build, e.g. "main (16264cbe)", from the image's build args."""
+    """Describe the running bot build, e.g. "main (16264cb)", from the image's build args."""
     version = os.getenv("BOT_VERSION", "").strip() or "dev"
     commit = os.getenv("BOT_COMMIT", "").strip()
     if commit and commit != "unknown":
-        return f"{version} (`{commit[:8]}`)"
+        return f"{version} (`{commit[:7]}`)"
     return version
 
 
