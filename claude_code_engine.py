@@ -8,6 +8,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import anthropic
+
 from common import EFFORT_ORDER, Review, ReviewError
 
 # Each release channel file holds the version it currently points to.
@@ -51,6 +53,49 @@ SEVERITY_BADGES = {
     "high": "🟠 High",
     "medium": "🟡 Medium",
     "low": "🔵 Low",
+}
+
+
+# /code-review follows its own output format and ignores the severity and
+# no-nitpick guidance above, so a separate Messages API call rates its findings.
+TRIAGE_MODEL = "claude-opus-5-5"
+NITPICK = "nitpick"
+
+TRIAGE_SYSTEM = """\
+You triage findings from an automated merge request review. For each finding,
+pick exactly one severity:
+
+- `critical`: security hole, data loss, crash, or breakage in a main flow;
+  must be fixed before merging
+- `high`: a real bug with a concrete failure scenario
+- `medium`: an edge-case bug or a risky pattern likely to cause one
+- `low`: a minor issue worth fixing but safe to merge as is, including a
+  violation of an explicit project rule that the finding quotes
+- `nitpick`: style, formatting, naming, redundancy, simplification or a
+  subjective preference with no behavioral impact and no project rule behind it
+
+Judge each finding by its own failure scenario; do not invent new problems.
+Return one rating per finding, using the finding's index.
+"""
+
+TRIAGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "ratings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "severity": {"type": "string", "enum": [*SEVERITY_BADGES, NITPICK]},
+                },
+                "required": ["index", "severity"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["ratings"],
+    "additionalProperties": False,
 }
 
 
@@ -243,6 +288,64 @@ def parse_findings(review):
     return findings
 
 
+def triage_findings(findings):
+    """Rate each finding with the Messages API and drop nitpicks.
+
+    Returns (findings to report, nitpicks dropped, triage model), or the
+    findings unchanged with None for the rest when triage cannot run: a review
+    without severities is still worth posting.
+    """
+    if not findings:
+        return findings, 0, None
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("Warning: ANTHROPIC_API_KEY is not set; skipping finding triage")
+        return findings, None, None
+
+    model = os.getenv("ANTHROPIC_TRIAGE_MODEL", "").strip() or TRIAGE_MODEL
+    listing = json.dumps(
+        [
+            {
+                "index": index,
+                "summary": f.get("summary") or f.get("short_summary"),
+                "failure_scenario": f.get("failure_scenario"),
+                "category": f.get("category"),
+            }
+            for index, f in enumerate(findings)
+        ],
+        indent=2,
+    )
+    try:
+        response = anthropic.Anthropic(api_key=api_key).messages.create(
+            model=model,
+            max_tokens=4000,
+            system=TRIAGE_SYSTEM,
+            messages=[{"role": "user", "content": f"Findings:\n\n{listing}"}],
+            output_config={
+                "effort": "low",
+                "format": {"type": "json_schema", "schema": TRIAGE_SCHEMA},
+            },
+        )
+        text = next(b.text for b in response.content if b.type == "text")
+        ratings = json.loads(text)["ratings"]
+    except (anthropic.APIError, StopIteration, json.JSONDecodeError, KeyError) as e:
+        print(f"Warning: finding triage failed ({e}); posting findings unrated")
+        return findings, None, None
+    print(f"Triage with {model}: {response.usage.input_tokens} input, "
+          f"{response.usage.output_tokens} output tokens")
+
+    severities = {r["index"]: r["severity"] for r in ratings}
+    kept = []
+    for index, finding in enumerate(findings):
+        severity = severities.get(index)
+        if severity == NITPICK:
+            continue
+        if severity:
+            finding = {**finding, "severity": severity}
+        kept.append(finding)
+    return kept, len(findings) - len(kept), model
+
+
 def severity_of(finding):
     return str(finding.get("severity") or "").strip().lower()
 
@@ -253,10 +356,13 @@ def severity_rank(finding, severities):
     return severities.index(severity) if severity in severities else len(severities)
 
 
-def format_findings(findings, web_url, head_sha):
+def format_findings(findings, web_url, head_sha, nitpicks=0):
     """Render /code-review findings as Markdown with links to the reviewed commit."""
+    omitted = (
+        f"\n\n_{nitpicks} style nitpick{'s' if nitpicks != 1 else ''} omitted._" if nitpicks else ""
+    )
     if not findings:
-        return "✅ Everything looks good, no issues found."
+        return "✅ Everything looks good, no issues found." + omitted
 
     severities = list(SEVERITY_BADGES)
     findings = sorted(findings, key=lambda f: severity_rank(f, severities))
@@ -291,7 +397,7 @@ def format_findings(findings, web_url, head_sha):
         scenario = finding.get("failure_scenario")
         if scenario:
             lines += ["", f"**Failure scenario:** {scenario}"]
-    return "\n".join(lines)
+    return "\n".join(lines) + omitted
 
 
 def run(project, mr, payload):
@@ -320,15 +426,16 @@ def run(project, mr, payload):
     print(f"Claude Code review cost: ${cost:.2f}")
 
     findings = parse_findings(review)
+    triage_model = None
     if findings is not None:
-        unrated = sum(severity_of(f) not in SEVERITY_BADGES for f in findings)
-        if unrated:
-            print(f"Warning: {unrated} of {len(findings)} findings have no known severity")
-        review = format_findings(findings, project.web_url, head_sha)
+        findings, nitpicks, triage_model = triage_findings(findings)
+        review = format_findings(findings, project.web_url, head_sha, nitpicks or 0)
 
     config_parts = [f"Engine: Claude Code {version} `/code-review`", f"effort: `{effort}`"]
     if model:
         config_parts.append(f"model: `{model}`")
+    if triage_model:
+        config_parts.append(f"triage: `{triage_model}`")
     config_parts.append(f"commit: `{head_sha[:8]}`")
     config_parts.append(f"cost: ${cost:.2f}")
     return Review(review, [" · ".join(config_parts)])

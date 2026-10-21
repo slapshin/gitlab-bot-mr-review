@@ -108,10 +108,12 @@ Code loads `CLAUDE.md` and `.claude/` rules itself and can read any file in
 the repository, not just the diff. Its tools are restricted to reading files
 and `git diff/log/show/blame`.
 
-The bot appends review guidance to the Claude Code system prompt: report only
-real problems (no style nitpicks), return no findings when the change is sound,
-and tag each finding with a severity (`critical`, `high`, `medium`, `low`). The
-note lists findings most severe first; a clean review says everything looks good.
+`/code-review` keeps its own output format, so the bot then sends its findings
+to the Messages API for triage: each finding gets a severity (`critical`,
+`high`, `medium`, `low`), and style nitpicks are dropped (the note says how
+many). The note lists findings most severe first; a clean review says
+everything looks good. Triage needs `ANTHROPIC_API_KEY`; if it fails, the
+findings are posted unrated.
 Lower `ANTHROPIC_REVIEW_EFFORT` reports fewer, higher-confidence findings.
 
 ```yaml
@@ -130,6 +132,7 @@ Options for this engine:
 
 - `ANTHROPIC_REVIEW_EFFORT`: passed to `/code-review` as its level (default: `high`)
 - `ANTHROPIC_REVIEW_MODEL`: optional; unset uses the Claude Code default model
+- `ANTHROPIC_TRIAGE_MODEL`: model that rates findings (default: `claude-opus-5-5`)
 - `CLAUDE_CODE_MAX_BUDGET_USD`: spend cap per review (default: `5`)
 - `CLAUDE_CODE_TIMEOUT_SECONDS`: wall-clock limit (default: `1800`)
 - `CLAUDE_CODE_VERSION`: Claude Code release to review with, e.g. `2.1.302`, or a
