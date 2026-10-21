@@ -49,10 +49,10 @@ REVIEW_GUIDANCE = """\
 
 # Severity order, most severe first, and the badge shown for each level.
 SEVERITY_BADGES = {
-    "critical": "🔴 Critical",
-    "high": "🟠 High",
-    "medium": "🟡 Medium",
-    "low": "🔵 Low",
+    "critical": "🔴",
+    "high": "🟠",
+    "medium": "🟡",
+    "low": "🔵",
 }
 
 
@@ -379,7 +379,7 @@ def format_findings(findings, web_url, head_sha, nitpicks=0):
         title = finding.get("short_summary") or finding.get("summary") or "Issue"
         tags = [f"`{tag}`" for tag in (finding.get("category"), finding.get("verdict")) if tag]
         badge = SEVERITY_BADGES.get(severity_of(finding))
-        heading = f"### {number}. {badge + ': ' if badge else ''}{title}"
+        heading = f"### {number}. {badge + ' ' if badge else ''}{title}"
         if tags:
             heading += " · " + " ".join(tags)
         lines += ["", heading]
