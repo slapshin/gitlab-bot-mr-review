@@ -25,7 +25,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
-COPY review.py common.py api_engine.py claude_code_engine.py ./
+COPY review.py common.py api_engine.py claude_code_engine.py mr_context.py ./
 
 # Bot build identity shown in every MR note, set by the image build workflow.
 ARG BOT_VERSION=dev
