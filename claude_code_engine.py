@@ -458,9 +458,9 @@ def run(project, mr, payload):
     cli = resolve_cli()
     version = installed_version(cli)
     # The title goes in too: /code-review only sees the commit range.
-    author_context = mr_context.build(mr, include_commits=False)
-    author_context = f"### Title\n\n{mr_context.defuse(mr.title)}\n\n{author_context}".strip()
-    print(f"Author context: {len(author_context)} chars")
+    context = mr_context.build(mr, include_commits=False)
+    author_context = f"### Title\n\n{mr_context.defuse(mr.title)}\n\n{context.text}".strip()
+    print(f"{context.summary} ({len(author_context)} chars)")
 
     review, cost = run_review(
         cli,
@@ -492,4 +492,4 @@ def run(project, mr, payload):
         config_parts.append(f"triage: `{triage_model}`")
     config_parts.append(f"commit: `{head_sha[:8]}`")
     config_parts.append(f"cost: ${cost:.2f}")
-    return Review(review, [" · ".join(config_parts)], approved)
+    return Review(review, [" · ".join(config_parts), context.summary], approved)

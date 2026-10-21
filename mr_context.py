@@ -2,6 +2,7 @@
 # description, commit messages and discussion threads — so the review can
 # respect decisions that were already explained instead of re-flagging them.
 import os
+from dataclasses import dataclass
 
 import gitlab.exceptions
 
@@ -20,34 +21,60 @@ MAX_BOT_NOTE_CHARS = 1500
 BOT_NOTE_KEPT_PREFIXES = ("### ", "- `", "**Verdict")
 
 
+@dataclass
+class AuthorContext:
+    """The collected context as Markdown ("" when there is none) and a
+    one-line summary of what was found, for the review note footer."""
+
+    text: str
+    summary: str
+
+
 def is_enabled():
     value = os.getenv("REVIEW_AUTHOR_CONTEXT_ENABLED", "true").strip().lower()
     return value not in ("0", "false", "no", "off")
 
 
 def build(mr, include_commits):
-    """Return the author context as Markdown, or "" when there is none.
+    """Collect the author context of the MR.
 
     The description is always included. Commit messages and discussions are
     added when REVIEW_AUTHOR_CONTEXT_ENABLED is on; commits only when the
     engine cannot read git history itself.
     """
     sections = []
+    found = []
     if mr.description and mr.description.strip():
         sections.append(f"### Description\n\n{mr.description.strip()}")
+        found.append("description")
 
     if is_enabled():
         budget = int(os.getenv("MAX_AUTHOR_CONTEXT_CHARS", "20000"))
         if include_commits:
-            commits = format_commits(fetch_commits(mr), budget)
+            commits, commit_count = format_commits(fetch_commits(mr), budget)
             if commits:
                 sections.append(f"### Commit Messages\n\n{commits}")
+                found.append(plural(commit_count, "commit message"))
                 budget -= len(commits)
-        discussions = format_discussions(fetch_discussions(mr), budget)
+        discussions, thread_count, note_count, omitted = format_discussions(
+            fetch_discussions(mr), budget
+        )
         if discussions:
             sections.append(f"### Discussions\n\n{discussions}")
+            threads = plural(thread_count, "thread")
+            details = [plural(note_count, "comment")]
+            if omitted:
+                details.append(f"{omitted} older omitted")
+            found.append(f"{threads} ({', '.join(details)})")
+    else:
+        found.append("discussions and commits disabled")
 
-    return defuse("\n\n".join(sections))
+    summary = "Author context: " + (" · ".join(found) if found else "none")
+    return AuthorContext(defuse("\n\n".join(sections)), summary)
+
+
+def plural(count, noun):
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
 def wrap(context):
@@ -78,7 +105,10 @@ def fetch_discussions(mr):
 
 
 def format_commits(commits, budget):
-    """List commit messages oldest first, keeping the newest within budget."""
+    """List commit messages oldest first, keeping the newest within budget.
+
+    Returns the rendered list and how many messages it holds.
+    """
     entries = []
     used = 0
     # GitLab returns MR commits newest first.
@@ -93,29 +123,36 @@ def format_commits(commits, budget):
         entries.append(entry)
         used += len(entry) + 1
     entries.reverse()
-    return "\n".join(entries)
+    return "\n".join(entries), len(entries)
 
 
 def format_discussions(discussions, budget):
-    """Render discussion threads oldest first, keeping the newest within budget."""
+    """Render discussion threads oldest first, keeping the newest within budget.
+
+    Returns the rendered threads, how many threads and comments they hold,
+    and how many older threads were left out.
+    """
     threads = select_threads(discussions)
     rendered = []
+    note_count = 0
     used = 0
-    for _, text in sorted(threads, key=lambda t: t[0], reverse=True):
+    for _, text, notes in sorted(threads, key=lambda t: t[0], reverse=True):
         if used + len(text) > budget:
             break
         rendered.append(text)
+        note_count += notes
         used += len(text) + 2
-    omitted = len(threads) - len(rendered)
+    thread_count = len(rendered)
+    omitted = len(threads) - thread_count
 
     rendered.reverse()
     if omitted:
         rendered.insert(0, f"_{omitted} older thread(s) omitted._")
-    return "\n\n".join(rendered)
+    return "\n\n".join(rendered), thread_count, note_count, omitted
 
 
 def select_threads(discussions):
-    """Return (last activity, rendered text) for each thread worth showing."""
+    """Return (last activity, rendered text, note count) for each thread worth showing."""
     all_notes = [n for d in discussions for n in d.get("notes") or []]
     last_human_at = max((n["created_at"] for n in all_notes if is_human_note(n)), default="")
     # The review a later human comment most likely answers.
@@ -132,7 +169,7 @@ def select_threads(discussions):
         # A bot review alone tells the model nothing new, unless someone
         # answered it, in its thread or in a later comment of their own.
         if notes[0] is answered_review or any(is_human_note(n) for n in notes):
-            threads.append((notes[-1]["created_at"], format_thread(notes)))
+            threads.append((notes[-1]["created_at"], format_thread(notes), len(notes)))
     return threads
 
 

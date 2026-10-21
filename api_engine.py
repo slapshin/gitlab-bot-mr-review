@@ -458,8 +458,9 @@ def run(project, mr, payload):
         )
         print("Warning: no head_sha available, reviewing from the diff alone")
 
-    author_context = mr_context.build(mr, include_commits=True)
-    print(f"Author context: {len(author_context)} chars")
+    context = mr_context.build(mr, include_commits=True)
+    author_context = context.text
+    print(f"{context.summary} ({len(author_context)} chars)")
 
     system_content, user_content = build_prompt(
         mr, diff_text, snapshots, scope_notes, claude_context, author_context
@@ -524,6 +525,7 @@ def run(project, mr, payload):
     if msg.stop_reason == "max_tokens":
         footer_lines.append("⚠️ This review was truncated at the output token limit.")
     footer_lines.append(f"{' · '.join(config_parts)} · Tokens — {token_summary}")
+    footer_lines.append(context.summary)
     # A truncated review may have cut off the issues that would block it.
     approved = msg.stop_reason != "max_tokens" and is_approved(review)
     return Review(review, footer_lines, approved)
