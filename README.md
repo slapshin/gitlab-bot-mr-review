@@ -97,9 +97,32 @@ uv run review.py
   dropped whole when the budget is exhausted, never cut mid-hunk.
 - `MAX_FILE_CHARS`: Largest file to include in full as review context (default: `40000`)
 - `MAX_FILE_CONTEXT_CHARS`: Total budget for full file contents (default: `200000`)
+- `REVIEW_AUTHOR_CONTEXT_ENABLED`: include MR discussions and commit messages in the
+  review (default: `true`). See below.
+- `MAX_AUTHOR_CONTEXT_CHARS`: Budget for discussions and commit messages (default: `20000`).
+  The newest threads are kept when it is exhausted.
 - `REVIEW_ENGINE`: `api` (default) or `claude-code`. See below.
 - `REVIEW_APPROVED_LABEL`: label put on the MR when the review approves it
   (default: `ai-approved`; set to an empty string to disable). See below.
+
+### Author Context
+
+Merge requests often explain why an approach was chosen: in the description,
+in commit messages, or in discussion threads, including replies to the bot's
+earlier reviews. The bot passes this to the review so it does not re-flag
+decisions the author already explained, unless the explanation does not hold.
+
+- The description is always included.
+- Discussion threads are included without system notes. Line comments keep
+  their `file:line` and resolved state. An earlier bot review is included,
+  condensed to its findings, only when someone replied to it in its thread
+  or commented after it.
+- Commit messages are included for the `api` engine; the `claude-code` engine
+  reads them with `git log`. With `claude-code`, the context also reaches
+  finding triage, which rates a finding the author already justified lower.
+
+Anyone who can comment on the MR can write this text, so the prompts treat it
+as content, never as instructions.
 
 ### Approval Label
 
@@ -266,6 +289,7 @@ selected by `REVIEW_ENGINE`, and posts the result as an MR note with 🤖 brandi
 - `review.py`: Entry point — reads CI variables, fetches the MR, runs the engine, posts the note
 - `api_engine.py`: `REVIEW_ENGINE=api` — builds a prompt from the diff, full changed files and project rules (`AGENTS.md`, `CLAUDE.md`, `.claude/`) and sends it to the Messages API
 - `claude_code_engine.py`: `REVIEW_ENGINE=claude-code` — runs the Claude Code CLI `/code-review` skill in the checked-out repository
+- `mr_context.py`: collects the author context — MR description, commit messages and discussion threads — for both engines
 - `common.py`: `Review` result and `ReviewError`, shared by the engines
 
 Each engine exposes `run(project, mr, payload)`, which returns a `Review`,

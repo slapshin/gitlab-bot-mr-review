@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 # Effort levels, ordered from cheapest to most thorough.
 EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max")
 
+# Starts every note the bot posts; also how earlier bot notes are recognized.
+NOTE_HEADER = "🤖 **Claude Code Review**"
+
 
 class ReviewError(Exception):
     """A failure worth reporting back to the merge request."""

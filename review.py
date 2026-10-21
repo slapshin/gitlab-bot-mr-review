@@ -8,9 +8,8 @@ import gitlab.exceptions
 
 import api_engine
 import claude_code_engine
-from common import ReviewError
+from common import NOTE_HEADER, ReviewError
 
-NOTE_HEADER = "🤖 **Claude Code Review**"
 DEFAULT_APPROVED_LABEL = "ai-approved"
 
 # REVIEW_ENGINE value -> engine module exposing run(project, mr, payload).
